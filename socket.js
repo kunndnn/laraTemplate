@@ -35,6 +35,7 @@ io.on("connection", async (socket) => {
 
     socket.on("usersListing", async (body) => {
         const { userId } = body;
+        console.log({ userId });
         const [users, newUsers] = await Promise.all([
             query(
                 `select chats.id as chatId, rooms.id as roomId, users.id, users.first_name, users.last_name,
@@ -47,10 +48,21 @@ io.on("connection", async (socket) => {
                 order by chatId desc`,
                 [userId, userId, userId]
             ),
-            query(`select * from users where id !=?`, [userId]),
+            query(
+                `SELECT u.id 
+                    FROM users u
+                    WHERE u.id != ?
+                    AND u.id NOT IN (
+                        SELECT r.receiverId 
+                        FROM chat_rooms r
+                        WHERE r.senderId = ?
+                        UNION
+                        SELECT r.senderId 
+                        FROM chat_rooms r
+                        WHERE r.receiverId = ?)`,
+                [userId, userId, userId]
+            ),
         ]);
-
-        console.log({ users });
         const result = {
             status: true,
             message: "users listing",

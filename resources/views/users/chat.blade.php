@@ -272,7 +272,7 @@ Chat
                $('.messages').html(''); // on room join empty the messages
 
                let appendMessage="";
-               const messages=chats.map((chat)=>{
+               const messages=chats.reverse().map((chat)=>{
 
                    if(userId==chat.senderId){
                        appendMessage   +=` <li class="sender">
@@ -288,6 +288,7 @@ Chat
                });
 
                $('.messages').append(appendMessage);
+            //    scrollToBottom();
            }
        });
 
@@ -308,6 +309,7 @@ Chat
                // messages.scrollTop = messages.scrollHeight;
                // var chatMessages = $('.messages');
                // chatMessages.scrollTop(chatMessages[0].scrollHeight);
+               scrollToBottom();
 
            }
        });
@@ -332,10 +334,23 @@ Chat
                }
 
                $('.messages').append(appendMessage);
-           }
+               // Scroll to the bottom
+            //    $('.modal-body').scrollTop($('.modal-body')[0].scrollHeight);
+            scrollToBottom();
+            
+            }
 
        });
 
+       function scrollToBottom() {
+        // const chatBox = $('.modal-dialog-scrollable');
+        // chatBox.scrollTop(chatBox[0].scrollHeight);
+        // window.scrollTo(0, $(".modal-body").scrollHeight);
+
+    //     $('html, body').animate({
+    //     scrollTop: $(".modal-body").offset().top
+    // }, 2000);
+    }
        $('form').on('submit',function(e){
            e.preventDefault();
        });
