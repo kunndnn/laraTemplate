@@ -1,6 +1,8 @@
 const { Server } = require("socket.io");
 const { createConnection } = require("mysql");
 const { promisify } = require("util");
+const fs = require("fs");
+const path = require("path");
 
 // DB connection
 const con = createConnection({
@@ -30,22 +32,53 @@ const io = new Server({
     },
 });
 
+function saveFileFromBase64(base64String, filePath) {
+    // Extract the file extension from the Base64 string (if it contains data URI prefix)
+    const matches = base64String.match(/^data:(.+);base64,(.+)$/);
+
+    let extension = "";
+    let data = base64String;
+
+    if (matches) {
+        const mimeType = matches[1]; // e.g., 'image/png'
+        extension = mimeType.split("/")[1]; // Extract 'png'
+        data = matches[2]; // The actual Base64 string data
+    }
+
+    // If extension couldn't be determined, default to 'bin'
+    if (!extension) {
+        extension = "bin";
+    }
+
+    // Generate a unique file name
+    const fileName = `file_${Date.now()}.${extension}`;
+    const fullPath = path.join(filePath, fileName);
+
+    // Decode the Base64 string into a Buffer
+    const buffer = Buffer.from(data, "base64");
+
+    // Write the file to the given path
+    fs.writeFileSync(fullPath, buffer); // Synchronous to ensure file is written before proceeding
+    console.log("File saved:", fullPath);
+
+    return fileName;
+}
+
 io.on("connection", async (socket) => {
     // ...
 
     socket.on("usersListing", async (body) => {
         const { userId } = body;
-        console.log({ userId });
         const [users, newUsers] = await Promise.all([
             query(
-                `select chats.id as chatId, rooms.id as roomId, users.id, users.first_name, users.last_name,
+                `select chats.id as chatId, rooms.id as roomId, users.id, users.first_name, users.last_name, chats.created_at,
                 (select message from chats where chats.roomId=rooms.id order by chats.id desc limit 1) as lastMsg
                 from chat_rooms as rooms
                 left join users on rooms.senderId=users.id or rooms.receiverId=users.id
                 left join chats on chats.roomId =rooms.id
                 where (rooms.senderId=? or rooms.receiverId=?) and (users.id !=?)
                 group by users.id
-                order by chatId desc`,
+                order by created_at`,
                 [userId, userId, userId]
             ),
             query(
@@ -63,6 +96,7 @@ io.on("connection", async (socket) => {
                 [userId, userId, userId]
             ),
         ]);
+        console.log({ users });
         const result = {
             status: true,
             message: "users listing",
@@ -89,12 +123,22 @@ io.on("connection", async (socket) => {
             roomId = createRoom.insertId;
         }
 
-        const chats = await query(
-            `select * from chats where roomId=?
-            order by id desc`,
-            [roomId]
-        );
+        const limit = 2;
+        const page = body.page || 1;
+        const skip = limit * page;
 
+        const [chats, count] = await Promise.all([
+            query(
+                `select * from chats where roomId=?
+            order by id desc limit ? offset ?`,
+                [roomId, limit, skip]
+            ),
+            query(`select count(*) as count from chats where roomId=?`, [
+                roomId,
+            ]).then((data) => data[0]),
+        ]);
+
+        console.log({ count, roomId });
         roomId = Number(roomId);
         //join room
         socket.join(roomId);
@@ -108,11 +152,19 @@ io.on("connection", async (socket) => {
     });
 
     socket.on("msg", async (body) => {
-        let { roomId, senderId, message } = body;
+        let { roomId, senderId, message, attachment, messageType } = body;
+        // console.log({ attachment, messageType });
+
+        if (attachment) {
+            const filePath = path.join(__dirname, "public/uploads"); // Directory to save the file
+            const fileName = saveFileFromBase64(attachment, filePath);
+            // console.log({ fileName });
+            attachment = fileName;
+        }
 
         const { insertId } = await query(
-                `insert into chats(roomId,senderId, message)values(?,?,?)`,
-                [roomId, senderId, message]
+                `insert into chats(roomId,senderId, message, attachment, messageType)values(?,?,?,?,?)`,
+                [roomId, senderId, message, attachment, messageType]
             ),
             messages = await query(`select * from chats where id=? limit 1`, [
                 insertId,
@@ -127,7 +179,7 @@ io.on("connection", async (socket) => {
             message: "msg sent",
             data: messages,
         };
-
+        console.log({ messages });
         io.to(roomId).emit("msg", result);
     });
 
