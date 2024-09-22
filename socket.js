@@ -27,7 +27,7 @@ const query = promisify(con.query).bind(con);
 const io = new Server({
     /* options */
     cors: {
-        origin: "http://127.0.0.1:8000",
+        origin: ["http://127.0.0.1:8000", "http://localhost:8000"],
         // origin: "*",
     },
 });
@@ -96,7 +96,7 @@ io.on("connection", async (socket) => {
                 [userId, userId, userId]
             ),
         ]);
-        console.log({ users });
+        // console.log({ users });
         const result = {
             status: true,
             message: "users listing",
@@ -114,6 +114,7 @@ io.on("connection", async (socket) => {
         ).then((data) => data[0]);
 
         if (roomFound) {
+            console.log({ roomFound });
             roomId = roomFound.id;
         } else {
             const createRoom = await query(
@@ -123,9 +124,9 @@ io.on("connection", async (socket) => {
             roomId = createRoom.insertId;
         }
 
-        const limit = 2;
+        const limit = 10;
         const page = body.page || 1;
-        const skip = limit * page;
+        const skip = limit * page - limit;
 
         const [chats, count] = await Promise.all([
             query(
@@ -138,16 +139,17 @@ io.on("connection", async (socket) => {
             ]).then((data) => data[0]),
         ]);
 
-        console.log({ count, roomId });
+        console.log({ chats, roomId, page, skip });
+        // console.log({ count, roomId });
         roomId = Number(roomId);
         //join room
         socket.join(roomId);
         const result = {
             status: true,
             message: "room joined",
+            page,
             data: { chats, roomId },
         };
-
         io.to(roomId).emit("joinRoom", result);
     });
 
@@ -179,7 +181,7 @@ io.on("connection", async (socket) => {
             message: "msg sent",
             data: messages,
         };
-        console.log({ messages });
+        // console.log({ messages });
         io.to(roomId).emit("msg", result);
     });
 

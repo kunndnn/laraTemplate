@@ -203,7 +203,8 @@
         $().ready(function() {
 
             const receiveNotify = new Audio("{{ asset('audios/msg.wav') }}");
-            const socket = io('http://localhost:3000');
+            const socketURL=`http://localhost:3000`;
+            const socket = io(socketURL);
 
             const userId = "{{ Auth::user()->id }}";
             //on connect
@@ -280,37 +281,43 @@
                 const {
                     status,
                     message,
+                    page,
                     data: {
                         chats,
                         roomId
                     }
                 } = params;
                 if (status) {
+
+                    // console.log({page})
                     $('.receiverDetails').attr('roomId', roomId); // setting roomId
+                    if(page<2)$('.messages').html(''); // on room join empty the messages only if it's first time
 
-                    $('.messages').html(''); // on room join empty the messages
-
-                    let appendMessage = "";
-                    const messages = chats.reverse().map((chat) => {
+                    let messages = "";
+                    chats.reverse().map((chat) => {
                         const {
                             date,
                             time
                         } = timeFormat(chat.created_at)
                         if (userId == chat.senderId) {
-                            appendMessage += ` <li class="sender">
+                            messages += ` <li class="sender">
                            <p>${chat.message}</p>
                            <span class="time">${time}</span>
                            </li>`;
                         } else {
-                            appendMessage += `<li class="repaly">
+                            messages += `<li class="repaly">
                                <p>${chat.message}</p>
                                <span class="time">${time}</span>
                                </li>`;
                         }
                     });
-
-                    $('.messages').append(appendMessage);
-                    scrollToBottom();
+                    
+                    if(page<2){// append if it's first time
+                        $('.messages').append(messages);
+                        scrollToBottom();
+                    }else{
+                        $('.messages').prepend(messages);
+                    }
                 }
             });
 
@@ -431,11 +438,19 @@
                 }, 600); // Duration of the animation in milliseconds (e.g., 600ms for a smooth scroll)
             }
 
+            let page=1;
             scrollBar.scroll(function() {
                 const pos = scrollBar.scrollTop();
+
                 if (pos == 0) {
                     // alert('top of the div');
                     console.log('reached top of div')
+                    const receiverId = $('.users').attr('userId');
+                    socket.emit('joinRoom', {
+                        senderId: userId,
+                        receiverId,
+                        page:++page
+                    }); // emit socket
                 }
             });
 
