@@ -10,3 +10,7 @@ Route::match(['GET', 'POST'], '/sigforgetPassword', [AuthController::class, 'sig
 Route::group(['middleware' => 'auth'], function () {
     Route::get('chat', [UserController::class, 'chat'])->name('chat');
 });
+
+Route::get('test', function () {
+    return view('users.test');
+});
